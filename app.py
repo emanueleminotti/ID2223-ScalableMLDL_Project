@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 # Fixed config
 # -----------------------------
 POLLENS = ["alder_pollen", "birch_pollen", "grass_pollen", "mugwort_pollen"]
-FORECAST_PATH = "latest_forecasts.json"
+FORECAST_PATH = "notebooks/latest_forecasts.json"
 HORIZON_DAYS = 7  # ALWAYS 7
 
 
@@ -213,19 +213,33 @@ def label_from_value(value: float, pollen_type: str) -> str:
 st.set_page_config(page_title="Pollen Forecast", page_icon="🌿", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
-bundle = load_latest_forecasts(FORECAST_PATH)
+bundle_live = load_latest_forecasts(FORECAST_PATH)
 
-# If no real data, keep placeholders stable across reruns
+# Toggle manuale: di default LIVE (anche se placeholders esistono)
+if "force_placeholders" not in st.session_state:
+    st.session_state["force_placeholders"] = False
+
+# Se forzo placeholders -> uso sempre placeholders
+# Se non forzo -> uso live se disponibile, altrimenti placeholders
 using_placeholders = False
-if bundle is None:
+
+if st.session_state["force_placeholders"]:
     using_placeholders = True
     if "placeholder_bundle" not in st.session_state:
         st.session_state["placeholder_bundle"] = generate_placeholders()
     bundle = st.session_state["placeholder_bundle"]
 else:
-    # If real data arrives, drop placeholders (optional)
-    if "placeholder_bundle" in st.session_state:
-        del st.session_state["placeholder_bundle"]
+    if bundle_live is None:
+        using_placeholders = True
+        if "placeholder_bundle" not in st.session_state:
+            st.session_state["placeholder_bundle"] = generate_placeholders()
+        bundle = st.session_state["placeholder_bundle"]
+    else:
+        bundle = bundle_live
+        # Se tornano i live, puoi anche cancellare i placeholder per pulizia
+        if "placeholder_bundle" in st.session_state:
+            del st.session_state["placeholder_bundle"]
+
 
 
 # Header
@@ -234,9 +248,18 @@ with left:
     st.title("🌿 Pollen Forecast & Allergy Risk")
     st.caption("7-day rolling forecast • Updated daily")
 with right:
-    st.markdown(f"<span class='pill'>Status: <b>{'Placeholders' if using_placeholders else 'Live data'}</b></span>", unsafe_allow_html=True)
-    if bundle.generated_at:
+    # Bottone-toggle: cliccando alterni Live <-> Placeholders
+    label = "Status: Live data" if not using_placeholders else "Status: Placeholders"
+    if st.button(label, use_container_width=True):
+        st.session_state["force_placeholders"] = not st.session_state["force_placeholders"]
+        st.rerun()
+
+    # Mostra l'ultimo update solo se sei in live e c'è
+    if (not using_placeholders) and bundle.generated_at:
         st.caption(f"Last update: {bundle.generated_at}")
+    elif using_placeholders:
+        st.caption("Demo mode (synthetic data)")
+
 
 st.divider()
 
@@ -259,17 +282,36 @@ for tab, pollen_type in zip(tabs, POLLENS):
         # Determine y-limits (so bands look good)
         ymax = max(max(y) * 1.15, 1.0)
         t1, t2 = risk_thresholds(pollen_type)
+        t1_plot = min(t1, ymax)
+        t2_plot = min(t2, ymax)
 
         # --- Plot
         fig = plt.figure(figsize=(9.5, 3.6))
         ax = fig.add_subplot(111)
 
         # Background bands: Low / Medium / High
-        ax.axhspan(0, min(t1, ymax), alpha=0.12)
-        ax.axhspan(min(t1, ymax), min(t2, ymax), alpha=0.12)
-        ax.axhspan(min(t2, ymax), ymax, alpha=0.12)
+        # Background bands (soft, health-style)
+        ax.axhspan(0, t1_plot, facecolor="#EAF6EA", alpha=1.0)
+        ax.axhspan(t1_plot, t2_plot, facecolor="#FFF4E5", alpha=1.0)
+        ax.axhspan(t2_plot, ymax, facecolor="#FDECEA", alpha=1.0)
 
-        ax.plot(xs, y, marker="o", linewidth=2)
+
+
+        # Threshold lines
+        ax.axhline(t1_plot, linestyle="--", linewidth=1)
+        ax.axhline(t2_plot, linestyle="--", linewidth=1)
+
+        # Threshold labels
+        ax.text(len(xs) - 0.15, t1_plot, " Low / Medium", va="bottom", ha="right", fontsize=9)
+        ax.text(len(xs) - 0.15, t2_plot, " Medium / High", va="bottom", ha="right", fontsize=9)
+
+        # Main line
+        ax.plot(
+            xs, y,
+            marker="o",
+            linewidth=2.5,
+            color="#2C7BE5"
+        )       
         ax.set_xticks(xs)
         ax.set_xticklabels(xlabels)
         ax.set_ylabel("Forecasted level")
@@ -280,19 +322,22 @@ for tab, pollen_type in zip(tabs, POLLENS):
         sel = st.session_state[key]
         ax.scatter([sel], [y[sel]], s=120, zorder=5)
 
+        fig.tight_layout()
         st.pyplot(fig, clear_figure=True)
 
         # --- “Weather-like” row of clickable days
         st.markdown("### Next 7 days")
         chip_cols = st.columns(7)
         for i, d in enumerate(days):
-            # Show emoji based on thresholded label (so it matches background bands)
             band_label = label_from_value(d.value, pollen_type)
             emoji = label_emoji(band_label)
             short = d.d.strftime("%a %d")
 
-            # Use a button as a day-chip
-            clicked = chip_cols[i].button(f"{emoji} {short}", key=f"{pollen_type}_chip_{i}", use_container_width=True)
+            clicked = chip_cols[i].button(
+                f"{emoji} {short}",
+                key=f"{pollen_type}_chip_{i}",
+                use_container_width=True
+            )
             if clicked:
                 st.session_state[key] = i
                 sel = i
@@ -302,6 +347,7 @@ for tab, pollen_type in zip(tabs, POLLENS):
         # --- Detail panel for selected day
         d = days[st.session_state[key]]
         band_label = label_from_value(d.value, pollen_type)
+
         st.subheader(f"{d.d.strftime('%A %d %B')} — details")
         c1, c2, c3 = st.columns([1.2, 1.2, 2.0])
         c1.metric("Forecasted level", f"{d.value:.2f}")
@@ -312,4 +358,3 @@ for tab, pollen_type in zip(tabs, POLLENS):
         st.markdown("#### Suggestions")
         for s in d.suggestions:
             st.write(f"• {s}")
-
