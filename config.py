@@ -26,10 +26,6 @@ class HopsworksSettings(BaseSettings):
     HOPSWORKS_PROJECT: str | None = None
     HOPSWORKS_HOST: str | None = None
 
-    # Air Quality
-    AQICN_API_KEY: SecretStr | None = None
-
-
     # Feature engineering
     FRAUD_DATA_SIZE: FraudDatasetSize = FraudDatasetSize.SMALL
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
@@ -67,10 +63,6 @@ class HopsworksSettings(BaseSettings):
                 if os.getenv("HOPSWORKS_PROJECT_ID") is None:
                     missing.append("HOPSWORKS_API_KEY")
         api_key = os.getenv("HOPSWORKS_API_KEY")
-
-        aqicn_api_key = os.getenv("AQICN_API_KEY")
-        if not aqicn_api_key:
-            missing.append("AQICN_API_KEY")
 
         if os.getenv("HOPSWORKS_PROJECT") is None:
             if self.HOPSWORKS_PROJECT is not None:
