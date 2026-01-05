@@ -1,4 +1,6 @@
 hopsworks[python,great-expectations]
+hopsworks==4.2.*
+hsfs==4.2.*
 streamlit==1.28.2
 folium
 streamlit-folium
