@@ -136,6 +136,8 @@ def load_latest_forecasts(path: str) -> Optional[ForecastBundle]:
                 v = float(it["value"])
                 series.append((d, v))
             series.sort(key=lambda x: x[0])
+            DEMO_START = date(2025, 1, 12)
+            series = start_date(series, DEMO_START, HORIZON_DAYS)
             forecasts[pollen_type] = series
 
         return ForecastBundle(generated_at=generated_at, forecasts=forecasts)
@@ -205,6 +207,15 @@ def label_from_value(value: float, pollen_type: str) -> str:
     if value < t2:
         return "Medium"
     return "High"
+
+def start_date(
+    series: List[Tuple[date, float]],
+    start: date,
+    horizon: int = HORIZON_DAYS,
+) -> List[Tuple[date, float]]:
+    values = [v for _, v in series][:horizon]
+    return [(start + timedelta(days=i + 1), v) for i, v in enumerate(values)]
+
 
 
 # -----------------------------
