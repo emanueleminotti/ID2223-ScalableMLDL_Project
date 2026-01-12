@@ -21,7 +21,7 @@ class HopsworksSettings(BaseSettings):
     
     MLFS_DIR: Path = Path(__file__).parent
 
-    # For hopsworks.login(), set as environment variables if they are not already set as env variables
+    #  hopsworks.login(), set as environment variables if they are not already set as env variables
     HOPSWORKS_API_KEY: SecretStr | None = None
     HOPSWORKS_PROJECT: str | None = None
     HOPSWORKS_HOST: str | None = None
